@@ -1,12 +1,25 @@
-# 비밀번호가 들어있는 설정 파일 - 절대 커밋 금지
+# 비밀번호 및 개인 설정 파일 (모든 하위 폴더 포함 제외)
 config.py
+.env
 
-# 실행 결과물
+# 실행 결과물 및 로그
 monitor_log.txt
 debug_*.png
 debug_*.html
 monitor_error_*.png
 
-# 파이썬
+# 파이썬 캐시 파일 및 바이트코드
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+
+# 가상환경 (Virtual Environment 사용 시)
+venv/
+.venv/
+env/
+
+# 에디터 / OS 임시 파일
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
