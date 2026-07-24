@@ -1,0 +1,12 @@
+# 비밀번호가 들어있는 설정 파일 - 절대 커밋 금지
+config.py
+
+# 실행 결과물
+monitor_log.txt
+debug_*.png
+debug_*.html
+monitor_error_*.png
+
+# 파이썬
+__pycache__/
+*.pyc
