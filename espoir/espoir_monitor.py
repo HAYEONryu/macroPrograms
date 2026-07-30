@@ -8,6 +8,10 @@
   - 오늘 기준 미래 15일(주말 제외) 중 예약 가능한 날짜 탐색
   - 발견 시 PC 알림창(모달) + 소리 + 로그
 
+진단:
+  - 달력이 비어있으면 '예약 없음'이 아니라 '확인 불가'로 구분해 경고
+  - 비로그인으로 달력이 안 보이면 자동으로 로그인 후 재시도
+
 사용법:
   python espoir_monitor.py                 # 60분 간격, 17시 종료
   python espoir_monitor.py --interval 30   # 30분 간격
@@ -41,7 +45,7 @@ from email.message import EmailMessage
 
 from playwright.async_api import async_playwright
 
-VERSION = "2026-07-24o"   # --version 으로 확인 가능
+VERSION = "2026-07-28a"   # --version 으로 확인 가능
 
 
 # ---------- 설정 파일(config.py) 로딩 ----------
@@ -1323,7 +1327,7 @@ async def load_calendar(page):
     return info
 
 
-async def check_once(page, ctx, dump=False, logged_in=False):
+async def check_once(page, ctx, dump=False, logged_in=False, retried=False):
     """반환: (found_dates, problem_reason)"""
     info = await load_calendar(page)
 
@@ -1337,32 +1341,34 @@ async def check_once(page, ctx, dump=False, logged_in=False):
         log("  로그인 상태: 로그인됨 (세션 유지 - 1~4단계 생략)")
     else:
         log(f"  로그인 상태: {state_label(st)}")
+    # retried: 이번 사이클에서 이미 재로그인을 시도했는지 (무한 재귀 방지용).
+    # logged_in(최초 로그인 여부)과 구분해야 세션 만료 시 재로그인이 동작한다.
     if st == "out":
-        if logged_in:
-            return [], "로그인이 풀렸습니다 (헤더에 로그인 버튼 존재)", []
-        if AUTO_FALLBACK_LOGIN:
-            log("  로그아웃 상태 -> 로그인 후 재확인 "
-                "(비로그인 달력은 전부 마감으로 보일 수 있음)")
+        if AUTO_FALLBACK_LOGIN and not retried:
+            log("  로그아웃 상태(세션 만료 추정) -> 재로그인 후 재확인")
             if await auto_login(page, ctx):
-                return await check_once(page, ctx, dump, logged_in=True)
-            return [], "로그인 실패 - 달력 결과를 신뢰할 수 없습니다", []
-        return [], "로그아웃 상태 - 달력 결과를 신뢰할 수 없습니다", []
+                return await check_once(page, ctx, dump,
+                                        logged_in=True, retried=True)
+            return [], "재로그인 실패 - 아이디/비번 또는 추가 인증 확인 필요", []
+        return [], "로그인이 풀렸고 재로그인도 실패했습니다", []
 
     if info.get("hasPwField") or "oauth" in (info.get("url") or "").lower():
         reason = "로그인 페이지로 리다이렉트됨 (로그인 필요)"
-        if AUTO_FALLBACK_LOGIN and not logged_in:
-            log("  " + reason + " -> 로그인 후 재시도")
+        if AUTO_FALLBACK_LOGIN and not retried:
+            log("  " + reason + " -> 재로그인 후 재시도")
             if await auto_login(page, ctx):
-                return await check_once(page, ctx, dump, logged_in=True)
+                return await check_once(page, ctx, dump,
+                                        logged_in=True, retried=True)
         return [], reason, []
 
     if not info.get("hasCalendar") or info.get("dayCells", 0) == 0:
         reason = (f"달력이 비어있음 (calendar={info.get('hasCalendar')}, "
                   f"cells={info.get('dayCells')}, notice={info.get('hasNotice')})")
-        if AUTO_FALLBACK_LOGIN and not logged_in:
-            log("  " + reason + " -> 로그인 후 재시도")
+        if AUTO_FALLBACK_LOGIN and not retried:
+            log("  " + reason + " -> 재로그인 후 재시도")
             if await auto_login(page, ctx):
-                return await check_once(page, ctx, dump, logged_in=True)
+                return await check_once(page, ctx, dump,
+                                        logged_in=True, retried=True)
         return [], reason, []
 
     targets = target_dates()
